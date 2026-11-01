@@ -104,12 +104,17 @@
 <div id="toast"></div>
 <div id="modal"><div id="mbody"></div></div>
 <script type="module">
-window.onerror = window.onunhandledrejection = e => toast('error: ' + (e.reason || e.message || e));
-import {joinRoom} from './trystero-nostr.mjs?v=2026-11-02.2';
-import * as G from './game.js?v=2026-11-02.2';
-import {botMove} from './bot.js?v=2026-11-02.2';
+// Dev telemetry: off GitHub Pages, errors and warnings also go to dev-serve.py (POST /console)
+const DEV = !location.hostname.endsWith('github.io');
+const report = (kind, m) => DEV && fetch('console', {method: 'POST', body: kind + ': ' + m}).catch(() => {});
+window.onerror = (msg, src, line, col, err) => { report('error', (err?.stack || msg) + ' @' + line + ':' + col); toast('error: ' + msg); };
+window.onunhandledrejection = e => { report('rejection', e.reason?.stack || e.reason); toast('error: ' + e.reason); };
+for (const k of ['error', 'warn']) { const f = console[k]; console[k] = (...a) => { report(k, a.map(String).join(' ')); f.apply(console, a); }; }
+import {joinRoom} from './trystero-nostr.mjs?v=2026-11-02.3';
+import * as G from './game.js?v=2026-11-02.3';
+import {botMove} from './bot.js?v=2026-11-02.3';
 
-const VERSION = '2026-11-02.2';
+const VERSION = '2026-11-02.3';
 
 // Tunable parameters
 const P = {
@@ -413,7 +418,7 @@ const colorSwap = () => ({b: false, w: true})[colorPref()] ?? Math.random() < .5
 function picker(key, opts, cur) {
   const row = document.createElement('div'); row.className = 'sizes';
   const paint = () => [...row.children].forEach(b => b.classList.toggle('on', b.dataset.v === String(cur())));
-  row.append(...opts.map(([v, label]) => Object.assign(btn(label, () => { localStorage.setItem(key, v); paint(); }, 'alt'), {dataset: {v}})));
+  row.append(...opts.map(([v, label]) => { const b = btn(label, () => { localStorage.setItem(key, v); paint(); }, 'alt'); b.dataset.v = v; return b; }));
   paint();
   return row;
 }

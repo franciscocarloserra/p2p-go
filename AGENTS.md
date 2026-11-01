@@ -12,3 +12,6 @@ Whole state is broadcast on every commit; highest `v` wins, ties by lowest `id`.
 
 ## Text
 UI text is English in the code; `ES` in `index.html` maps each English string to Spanish. New strings go through `t()` and get an `ES` entry. Game log goes in `s.ev` (`[template, ...args]`) so each peer shows it in its own language.
+
+## Dev
+`python3 dev-serve.py 7810` serves the site and appends browser errors/warnings (sent when not on github.io) to `/tmp/p2p-go-console.jsonl`. Read that log instead of asking for screenshots.
