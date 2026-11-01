@@ -1,5 +1,5 @@
 // Practice bot: one-move lookahead with simple Go heuristics (capture, save, atari, no self-atari, don't fill own eyes)
-import {nbrs, group, tryPlay} from './game.js?v=2026-11-02.3';
+import {nbrs, group, tryPlay} from './game.js?v=2026-11-02.4';
 
 const W = {
   capture: 10,       // per stone captured

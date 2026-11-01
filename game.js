@@ -1,6 +1,6 @@
 // Go rules and state, no DOM. Board: string, one char per point ('.' empty, 'b' black, 'w' white), row by row.
 // players[0] plays black. Area scoring (stones + empty points surrounded by one color), komi to white. Simple ko, no suicide.
-export const SIZES = [9, 13, 19];
+export const SIZES = [7, 9, 13, 19];
 export const KOMI = 7.5;
 const COL = 'bw';
 

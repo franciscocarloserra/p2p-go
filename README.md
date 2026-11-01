@@ -1,6 +1,6 @@
 # p2p go
 
-Go for two, browser to browser (WebRTC via Trystero/Nostr, no server), on 9×9, 13×13 or 19×19. There is also a practice mode against a simple bot. The UI is in English, or Spanish if the browser language is Spanish.
+Go for two, browser to browser (WebRTC via Trystero/Nostr, no server), on 7×7, 9×9, 13×13 or 19×19. There is also a practice mode against a simple bot. The UI is in English, or Spanish if the browser language is Spanish.
 
 Live: https://franciscocarloserra.github.io/p2p-go/ — pick a board size and "Online with link"; that creates a `#room:key` link. Send the whole link to the other player. "Practice vs bot" and "Local 2 players" play offline on one device, with undo. The "menu" pill starts a new game from anywhere.
 
