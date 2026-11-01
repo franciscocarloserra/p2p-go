@@ -85,7 +85,7 @@
   .xl #toast{background:#fff;color:#222;border:1px solid #adadad;border-radius:0}
 </style></head><body>
 <div id="xlhead"><div>Book1 - Excel</div><div class="tabs"><span>File</span><span>Home</span><span>Insert</span><span>Formulas</span><span>Data</span><span>Review</span></div><div class="fx">fx&nbsp;&nbsp;=SUM(B2:B14)</div><div class="cols"><span>A</span><span>B</span><span>C</span><span>D</span><span>E</span><span>F</span><span>G</span><span>H</span></div></div>
-<div id="bar"><span id="dot"></span><span id="status">connecting...</span><button class="pill" id="upd">update</button><button class="pill" id="count">count</button><button class="pill" id="copy">link</button><button class="pill" id="home">home</button><button class="pill" id="xl">xl</button></div>
+<div id="bar"><span id="dot"></span><span id="status">connecting...</span><button class="pill" id="upd">update</button><button class="pill" id="count">count</button><button class="pill" id="copy">link</button><button class="pill" id="home">menu</button><button class="pill" id="xl">xl</button></div>
 <div id="lobby"><span id="lobbyT"></span><br><button id="lCopy">Copy link</button><button id="lNew">New game</button></div>
 <main>
   <div class="who" id="oppW"><span id="oppN">waiting for opponent...</span><span id="oppS"></span></div>
@@ -93,7 +93,7 @@
   <div class="who" id="meW"><span id="meN"></span><span id="meS"></span></div>
 </main>
 <div id="acts">
-  <button id="bPass">Pass</button><button id="bAccept">Accept</button><button id="bResume">Resume</button><button id="bNew">New game</button><button id="bResign">Resign</button>
+  <button id="bPass">Pass</button><button id="bAccept">Accept</button><button id="bResume">Resume</button><button id="bNew">New game</button><button id="bUndo">Undo</button><button id="bResign">Resign</button>
   <button id="chatBtn">💬<span id="unread"></span></button>
 </div>
 <div id="chat">
@@ -105,11 +105,11 @@
 <div id="modal"><div id="mbody"></div></div>
 <script type="module">
 window.onerror = window.onunhandledrejection = e => toast('error: ' + (e.reason || e.message || e));
-import {joinRoom} from './trystero-nostr.mjs?v=2026-11-02.1';
-import * as G from './game.js?v=2026-11-02.1';
-import {botMove} from './bot.js?v=2026-11-02.1';
+import {joinRoom} from './trystero-nostr.mjs?v=2026-11-02.2';
+import * as G from './game.js?v=2026-11-02.2';
+import {botMove} from './bot.js?v=2026-11-02.2';
 
-const VERSION = '2026-11-02.1';
+const VERSION = '2026-11-02.2';
 
 // Tunable parameters
 const P = {
@@ -120,6 +120,7 @@ const P = {
   maxPayloadBytes: 16384,
   maxChat: 100,
   maxChatLen: 200,
+  maxUndo: 300,        // practice/local undo steps kept
   versionPollMs: 60000,
   toastMs: 2200,
   blipGain: 0.04,
@@ -128,7 +129,8 @@ const P = {
 };
 // UI text is English; ES maps each English string to Spanish for Spanish browsers
 const ES = {
-  'connecting...': 'conectando...', 'update': 'actualizar', 'count': 'contar', 'link': 'link', 'home': 'inicio', 'Copy link': 'Copiar link', 'New game': 'Partida nueva',
+  'connecting...': 'conectando...', 'update': 'actualizar', 'count': 'contar', 'link': 'link', 'menu': 'menú', 'Menu': 'Menú', 'Undo': 'Deshacer', 'Local 2 players': 'Local 2 jugadores', 'Continue practice': 'Seguir práctica', 'Continue local': 'Seguir local',
+  'Black': 'Negras', 'White': 'Blancas', 'Random': 'Al azar', 'Color vs bot': 'Color vs bot', 'Copy link': 'Copiar link', 'New game': 'Partida nueva',
   'waiting for opponent...': 'esperando rival...', 'Pass': 'Pasar', 'Accept': 'Aceptar', 'Resume': 'Seguir', 'Resign': 'Rendirse', 'tease...': 'molestar...',
   'Book1 - Excel': 'Libro1 - Excel', 'File': 'Archivo', 'Home': 'Inicio', 'Insert': 'Insertar', 'Formulas': 'Fórmulas', 'Data': 'Datos', 'Review': 'Revisar', 'fx  =SUM(B2:B14)': 'fx  =SUMA(B2:B14)',
   'send the link to your opponent': 'pasale el link a tu rival', 'taking a seat...': 'sentándose...', 'watching': 'mirando', 'your turn': 'tu turno',
@@ -160,7 +162,7 @@ $('ct').placeholder = t('tease...');
 // Online: room and password live in the URL hash #room:password (password encrypts signaling; WebRTC itself is end-to-end).
 // Practice: #solo, against the bot on this device.
 const rand = () => [...crypto.getRandomValues(new Uint8Array(P.randomBytes))].map(b => b.toString(16).padStart(2, '0')).join('');
-const MODE = location.hash === '#solo' ? 'solo' : /^#[^:]+:.+/.test(location.hash) ? 'online' : 'menu';
+const MODE = location.hash === '#solo' ? 'solo' : location.hash === '#local' ? 'local' : /^#[^:]+:.+/.test(location.hash) ? 'online' : 'menu';
 const ONLINE = MODE === 'online';
 addEventListener('hashchange', () => location.reload());
 const [room, ...pw] = decodeURIComponent(location.hash.slice(1)).split(':');
@@ -173,6 +175,7 @@ localStorage.setItem(KEY + ':me', me);
 let myName = localStorage.getItem('go:name') || '';
 let s = JSON.parse(localStorage.getItem(KEY + ':state') || 'null');
 let chat = JSON.parse(localStorage.getItem(KEY + ':chat') || '[]');
+let hist = ONLINE ? [] : JSON.parse(localStorage.getItem(KEY + ':hist') || '[]');
 let chatOpen = false, unread = 0, ghost = -1, mouse = false, showCount = false, botT = 0, aloneTimer = 0, aloneAsked = false;
 
 const cfg = {appId: P.appId, password: pw.join(':')};
@@ -181,9 +184,10 @@ const noop = {send() {}};
 const r = ONLINE ? joinRoom(cfg, room) : {getPeers: () => ({}), makeAction: () => noop};
 const stAct = r.makeAction('st'), chatAct = r.makeAction('chat'), pokeAct = r.makeAction('poke');
 
-const seat = () => s ? s.players.findIndex(p => p.id === me) : -1;
+// Local: one device, whoever's turn it is holds the seat
+const seat = () => !s ? -1 : MODE === 'local' ? (s.phase === 'play' ? s.turn : 0) : s.players.findIndex(p => p.id === me);
 const myTurn = () => s?.phase === 'play' && s.turn === seat();
-const save = () => { localStorage.setItem(KEY + ':state', JSON.stringify(s)); localStorage.setItem(KEY + ':chat', JSON.stringify(chat)); };
+const save = () => { localStorage.setItem(KEY + ':state', JSON.stringify(s)); localStorage.setItem(KEY + ':chat', JSON.stringify(chat)); if (!ONLINE) localStorage.setItem(KEY + ':hist', JSON.stringify(hist)); };
 // whole state, highest v wins (tie: lowest id); fresh id per commit so two peers committing the same v still converge
 const newer = (a, b) => !b || a.v > b.v || (a.v === b.v && a.id < b.id);
 function commit() { s.v++; s.id = rand(); save(); stAct.send(JSON.stringify(s)); render(true); botTick(); }
@@ -233,12 +237,22 @@ r.onPeerJoin = peer => {
 r.onPeerLeave = () => status();
 
 function play(a) {
-  const err = G.act(s, seat(), a);
+  const before = JSON.stringify(s), err = G.act(s, seat(), a);
   if (err) return toast(t(err));
+  if (MODE === 'local' && a.type === 'accept') G.act(s, 1, a);
+  if (!ONLINE) { hist.push(before); if (hist.length > P.maxUndo) hist.shift(); }
   ghost = -1;
   if (s.taken.length && a.type === 'play') blip(440);
   commit();
   if (s.phase === 'over') overModal();
+}
+
+// Undo (practice/local): back to the state before your last action; in practice that also takes back the bot's reply
+function undo() {
+  if (!hist.length) return;
+  clearTimeout(botT); ghost = -1;
+  const v = s.v;
+  s = JSON.parse(hist.pop()); s.v = v; commit(); close();
 }
 
 // Practice: the bot moves on its turn and accepts the count as soon as you do
@@ -272,6 +286,7 @@ function status() {
   else if (s.phase === 'over') msg = resultText();
   else if (s.phase === 'score') msg = seat() >= 0 && s.ok[seat()] ? t('waiting for {0} to accept', name(1 - seat())) : t('tap dead stones, then accept');
   else if (seat() < 0) msg = t('watching');
+  else if (MODE === 'local') msg = t('{0}\'s turn', name(s.turn)) + (log() ? ' · ' + log() : '');
   else msg = (myTurn() ? t('your turn') : t('{0}\'s turn', name(s.turn)) + (peers || !ONLINE ? '' : t(' (offline)'))) + (log() ? ' · ' + log() : '');
   $('status').textContent = msg;
   const alone = ONLINE && !peers, playing = s && s.phase !== 'waiting';
@@ -312,12 +327,12 @@ function render(anim) {
   status();
   const sat = seat() >= 0, playing = s && (s.phase === 'play' || s.phase === 'score');
   for (const [id, on] of [['bPass', s?.phase === 'play' && sat], ['bAccept', s?.phase === 'score' && sat], ['bResume', s?.phase === 'score' && sat],
-    ['bNew', s?.phase === 'over' && sat], ['bResign', playing && sat]]) $(id).style.display = on ? '' : 'none';
+    ['bNew', s?.phase === 'over' && sat], ['bResign', playing && sat], ['bUndo', !ONLINE && hist.length && s.phase !== 'waiting']]) $(id).style.display = on ? '' : 'none';
   $('bPass').disabled = !myTurn();
   $('bAccept').disabled = !!(s && sat && s.ok[seat()]);
   $('count').className = 'pill' + (showCount ? ' on' : '');
   if (!s) return;
-  const sc = drawBoard(anim), p = Math.max(0, seat()), o = 1 - p;
+  const sc = drawBoard(anim), p = MODE === 'local' ? 0 : Math.max(0, seat()), o = 1 - p;
   const side = (q, nm, sEl, wEl) => {
     const dot = Object.assign(document.createElement('i'), {className: 'bw'[q]});
     $(nm).replaceChildren(dot, s.players[q] ? name(q) : t('waiting for opponent...'));
@@ -393,21 +408,30 @@ const bold = text => Object.assign(document.createElement('b'), {textContent: te
 const show = (...els) => { $('mbody').replaceChildren(...els); $('modal').className = 'on'; };
 const close = () => $('modal').className = '';
 const sizePref = () => +localStorage.getItem('go:size') || P.defaultSize;
-function sizePicker() {
+const colorPref = () => localStorage.getItem('go:color') || 'r';
+const colorSwap = () => ({b: false, w: true})[colorPref()] ?? Math.random() < .5;
+function picker(key, opts, cur) {
   const row = document.createElement('div'); row.className = 'sizes';
-  const paint = () => [...row.children].forEach(b => b.classList.toggle('on', +b.dataset.n === sizePref()));
-  row.append(...G.SIZES.map(n => Object.assign(btn(`${n}×${n}`, () => { localStorage.setItem('go:size', n); paint(); }, 'alt'), {dataset: {n}})));
+  const paint = () => [...row.children].forEach(b => b.classList.toggle('on', b.dataset.v === String(cur())));
+  row.append(...opts.map(([v, label]) => Object.assign(btn(label, () => { localStorage.setItem(key, v); paint(); }, 'alt'), {dataset: {v}})));
   paint();
   return row;
 }
+const sizePicker = () => picker('go:size', G.SIZES.map(n => [n, `${n}×${n}`]), sizePref);
+const colorPicker = () => picker('go:color', [['b', t('Black')], ['w', t('White')], ['r', t('Random')]], colorPref);
+// Practice/local start fresh from the menu; an unfinished one gets a "Continue" button
+const savedGame = m => { const o = JSON.parse(localStorage.getItem('go:' + m + ':state') || 'null'); return o && o.phase !== 'over' ? o : null; };
+function newGame(m) {
+  if (m === 'online') return location.hash = rand() + ':' + rand();
+  localStorage.removeItem('go:' + m + ':state'); localStorage.removeItem('go:' + m + ':hist');
+  if (MODE === m) location.reload(); else location.hash = m;
+}
 function menu() {
-  const solo = () => {
-    const old = JSON.parse(localStorage.getItem('go:solo:state') || 'null');
-    if (old && (old.phase === 'over' || old.size !== sizePref())) localStorage.removeItem('go:solo:state');
-    location.hash = 'solo';
-  };
+  const cont = [['solo', 'Continue practice'], ['local', 'Continue local']].filter(([m]) => m !== MODE && savedGame(m))
+    .map(([m, label]) => btn(t(label), () => location.hash = m, 'alt'));
   show(Object.assign(document.createElement('div'), {className: 'title', textContent: '囲碁 go'}), bold(t('Board size')), sizePicker(),
-    btn(t('Online with link'), () => location.hash = rand() + ':' + rand()), btn(t('Practice vs bot'), solo));
+    btn(t('Online with link'), () => newGame('online')), btn(t('Practice vs bot'), () => newGame('solo')), btn(t('Local 2 players'), () => newGame('local')),
+    bold(t('Color vs bot')), colorPicker(), ...cont, ...(MODE === 'menu' ? [] : [btn(t('Cancel'), close, 'alt')]));
 }
 function askName() {
   const i = Object.assign(document.createElement('input'), {placeholder: t('your name'), maxLength: 20});
@@ -428,8 +452,15 @@ function askAlone() {
   show(bold(t('Your opponent isn\'t showing up')), btn(t('New game'), () => location.hash = rand() + ':' + rand()), btn(t('Keep waiting'), close, 'alt'));
 }
 function overModal() {
-  const again = btn(t('New game'), () => { close(); G.begin(s, sizePref(), true); commit(); });
-  show(bold(resultText()), sizePicker(), ...(seat() >= 0 ? [again] : []), btn(t('View board'), close, 'alt'));
+  // online rematch swaps colors; practice uses the color setting; local keeps Black/White seats
+  const again = btn(t('New game'), () => {
+    close(); hist = [];
+    if (MODE === 'solo') { s.players.sort((a, b) => !!a.bot - !!b.bot); G.begin(s, sizePref(), colorSwap()); }
+    else G.begin(s, sizePref(), ONLINE);
+    commit();
+  });
+  show(bold(resultText()), sizePicker(), ...(seat() >= 0 ? [again] : []), ...(hist.length ? [btn(t('Undo'), undo, 'alt')] : []),
+    btn(t('Menu'), menu, 'alt'), btn(t('View board'), close, 'alt'));
 }
 $('modal').onclick = e => { if (e.target === $('modal') && s && MODE !== 'menu' && myName) close(); };
 
@@ -443,7 +474,8 @@ $('count').onclick = () => { showCount = !showCount; render(); };
 $('copy').onclick = async () => { await navigator.clipboard.writeText(location.href); toast(t('link copied')); };
 $('lCopy').onclick = () => $('copy').onclick();
 $('lNew').onclick = () => location.hash = rand() + ':' + rand();
-$('home').onclick = () => location.hash = '';
+$('home').onclick = menu;
+$('bUndo').onclick = undo;
 $('upd').onclick = () => location.reload();
 setInterval(async () => {
   try { const v = (await (await fetch('version.txt', {cache: 'no-store'})).text()).trim(); if (v && v !== VERSION) $('upd').style.display = 'inline'; } catch {}
@@ -477,10 +509,15 @@ addEventListener('keydown', e => { if (e.key === 'Escape') stealth(!document.bod
 setInterval(status, 3000);
 
 function start() {
+  if (!s && MODE === 'local') {
+    s = G.newState(rand(), sizePref(), {id: 'b', name: t('Black')});
+    s.players.push({id: 'w', name: t('White')});
+    G.begin(s, s.size, false); hist = []; save();
+  }
   if (!s && !ONLINE) {
     s = G.newState(rand(), sizePref(), {id: me, name: myName});
     s.players.push({id: 'bot', name: t('Bot'), bot: true});
-    G.begin(s, s.size, Math.random() < .5); save();
+    G.begin(s, s.size, colorSwap()); hist = []; save();
   }
   if (!s) { s = G.newState(rand(), sizePref(), {id: me, name: myName}); save(); stAct.send(JSON.stringify(s)); }
   claim(); render(); renderChat(); botTick();
@@ -488,6 +525,6 @@ function start() {
 }
 
 if (MODE === 'menu') { render(); menu(); }
-else if (!myName) askName();
+else if (!myName && MODE !== 'local') askName();
 else { start(); if (ONLINE && seat() < 0 && s.players.length >= 2 && s.phase !== 'over') askSeat(); }
 </script></body></html>
